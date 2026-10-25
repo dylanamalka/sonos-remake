@@ -5,6 +5,7 @@ import { settings, diagnostics, diagnose } from './store';
 import { hostGuard, login, requireAuth, session } from './security';
 import * as sc from './soundcloud';
 import { audio, grant, localMedia, mediaPath } from './gateway';
+import { Listening, ListeningError } from './listening';
 const trackSchema = z.object({
   source: z.enum(['local', 'soundcloud']).optional(),
   id: z.string().max(2048),
@@ -36,6 +37,7 @@ const wrap =
   };
 export function createApi(sonos = new Sonos()) {
   const app = express();
+  const listening = new Listening(sonos);
   app.disable('x-powered-by');
   app.use(hostGuard);
   app.use(express.json({ limit: '128kb' }));
@@ -57,8 +59,36 @@ export function createApi(sonos = new Sonos()) {
         mock: sonos.mock,
         settings: await settings.read(),
         soundcloud: await sc.scStatus(),
+        listening: await listening.status(),
       }),
     ),
+  );
+  app.get(
+    '/api/listening',
+    wrap(async (_req, res) => res.json(await listening.status())),
+  );
+  app.put(
+    '/api/listening',
+    wrap(async (req, res) => {
+      const profile = z
+        .object({ sourceRoomId: idSchema.nullable(), targetRoomIds: z.array(idSchema).max(100) })
+        .strict()
+        .parse(req.body);
+      await listening.save(profile);
+      res.json(await listening.status());
+    }),
+  );
+  app.post(
+    '/api/listening/connect',
+    wrap(async (_req, res) => res.json(await listening.connect())),
+  );
+  app.post(
+    '/api/listening/stop',
+    wrap(async (_req, res) => res.json(await listening.stop())),
+  );
+  app.post(
+    '/api/listening/open',
+    wrap(async (_req, res) => res.json(await listening.openBrowser())),
   );
   app.post(
     '/api/discover',
@@ -168,7 +198,7 @@ export function createApi(sonos = new Sonos()) {
       capabilities: {
         discovery: 'SSDP / UDP 1900',
         control: 'UPnP SOAP / TCP 1400',
-        soundcloud: 'Authorized full progressive MP3 only',
+        soundcloud: 'Credential-free Mac line-in; optional authorized API MP3/HLS paths',
         gateway: 'Local HTTP MP3 / 44.1 kHz stereo for converted local files',
         mock: sonos.mock,
       },
@@ -278,9 +308,11 @@ export function createApi(sonos = new Sonos()) {
   app.use('/api', (_req, res) => res.status(404).json({ error: 'API route not found' }));
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status =
-      err instanceof z.ZodError || err instanceof TypeError || err instanceof SyntaxError
-        ? 400
-        : 502;
+      err instanceof ListeningError
+        ? err.status
+        : err instanceof z.ZodError || err instanceof TypeError || err instanceof SyntaxError
+          ? 400
+          : 502;
     const message =
       err instanceof z.ZodError
         ? 'Invalid request. Check the supplied fields and values.'
@@ -293,5 +325,5 @@ export function createApi(sonos = new Sonos()) {
     );
     if (!res.headersSent) res.status(status).json({ error: message });
   });
-  return { app, sonos };
+  return { app, sonos, listening };
 }

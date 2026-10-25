@@ -13,7 +13,10 @@
     "test:e2e": "playwright test",
     "check": "npm run typecheck && npm test && npm run build",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prototype:bridge": "tsx prototypes/mac-audio/run.ts",
+    "prototype:capture:build": "bash prototypes/mac-audio/build.sh",
+    "prototype:benchmark": "tsx prototypes/mac-audio/benchmark.ts"
   },
   "engines": {
     "node": ">=22.0.0"

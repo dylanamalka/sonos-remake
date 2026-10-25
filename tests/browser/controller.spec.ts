@@ -45,6 +45,8 @@ test('pair, control playback, change volume, group rooms, manage queue, and insp
       .getByRole('button', { name: 'SoundCloud', exact: true })
       .click();
   }
+  await expect(page.getByRole('heading', { name: 'SoundCloud, through your Mac.' })).toBeVisible();
+  await page.getByRole('button', { name: 'API library · optional' }).click();
   await expect(
     page.getByRole('heading', { name: 'Your next favorite is out there.' }),
   ).toBeVisible();

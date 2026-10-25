@@ -41,6 +41,8 @@ test('HTTP controller enforces pairing and origin checks, validates commands, pe
   }
   try {
     assert.equal((await request('/api/state')).status, 401);
+    assert.equal((await request('/api/listening')).status, 401);
+    assert.equal((await request('/api/listening/connect', {})).status, 401);
     assert.equal((await request('/api/auth', { code: 'incorrect' })).status, 401);
     const auth = await request('/api/auth', { code: process.env.PAIRING_CODE });
     assert.equal(auth.status, 200);
@@ -129,6 +131,31 @@ test('HTTP controller enforces pairing and origin checks, validates commands, pe
     assert.equal(converted.status, 200);
     assert.equal(converted.headers.get('content-type'), 'audio/mpeg');
     assert.ok((await converted.arrayBuffer()).byteLength > 1000);
+    assert.equal(
+      (
+        await request(
+          '/api/listening',
+          { sourceRoomId: 'MOCK_0', targetRoomIds: ['MOCK_1', 'MOCK_2'] },
+          'PUT',
+        )
+      ).status,
+      200,
+    );
+    const listening = await (await request('/api/listening/connect', {})).json();
+    assert.equal(listening.phase, 'input-selected');
+    assert.equal(listening.audiblePlaybackVerified, false);
+    assert.equal((await (await request('/api/listening/open', {})).json()).simulated, true);
+    assert.equal(
+      (
+        await request(
+          '/api/listening',
+          { sourceRoomId: 'MOCK_0', targetRoomIds: ['MOCK_1'], url: 'https://attacker.example' },
+          'PUT',
+        )
+      ).status,
+      400,
+    );
+    assert.equal((await request('/api/listening/stop', {})).status, 200);
     await writeFile(
       path.join(dir, 'soundcloud.json'),
       JSON.stringify({

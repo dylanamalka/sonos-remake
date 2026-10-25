@@ -26,6 +26,8 @@ export type Room = {
   duration: number;
   online: boolean;
   lineIn?: boolean;
+  lineInConnected?: boolean;
+  transportUri?: string;
 };
 export type Favorite = Track;
 export type Diagnostic = {

@@ -38,10 +38,13 @@ import {
   X,
 } from 'lucide-react';
 import type { Room, Track, Diagnostic } from '../server/types';
+import type { ListeningStatus } from '../server/listening';
+import SoundCloudListening from './soundcloud-listening';
 type Item = Track & { playlist?: boolean; count?: number };
 type State = {
   rooms: Room[];
   mock: boolean;
+  listening?: ListeningStatus;
   settings: { favorites: Track[]; roomOrder: string[]; hiddenRooms: string[] };
   soundcloud: {
     configured: boolean;
@@ -121,6 +124,7 @@ export default function Home() {
   const [items, setItems] = useState<Item[]>([]);
   const [queue, setQueue] = useState<Track[]>([]);
   const [scKind, setScKind] = useState('search');
+  const [scMode, setScMode] = useState('mac');
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState('');
   const [playlistTitle, setPlaylistTitle] = useState('');
@@ -164,6 +168,9 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [notice]);
   const room = state?.rooms.find((r) => r.id === roomId);
+  const lineInSelected = Boolean(
+    (room?.transportUri || room?.track?.uri)?.startsWith('x-rincon-stream:'),
+  );
   const coordinator = state?.rooms.find((r) => r.id === room?.coordinator) || room;
   const members = state?.rooms.filter((r) => r.coordinator === coordinator?.id) || [];
   const run = useCallback(
@@ -250,9 +257,10 @@ export default function Home() {
     if (tab === 'soundcloud') {
       setItems([]);
       setCursor('');
-      if (state?.soundcloud.connected && scKind !== 'search') void browse(scKind);
+      if (scMode === 'api' && state?.soundcloud.connected && scKind !== 'search')
+        void browse(scKind);
     }
-  }, [tab, scKind, state?.soundcloud.connected, browse]);
+  }, [tab, scMode, scKind, state?.soundcloud.connected, browse]);
   const favorite = (track: Track) => {
     if (!state) return;
     const has = state.settings.favorites.some((t) => t.id === track.id);
@@ -724,104 +732,133 @@ export default function Home() {
                 </div>
                 <Cloud size={42} className="orange" />
               </div>
-              {!state?.soundcloud.connected ? (
-                <section className="connect-panel">
-                  <div className="connect-icon">
-                    <Cloud size={48} />
-                  </div>
-                  <div>
-                    <h2>Your next favorite is out there.</h2>
-                    <p>
-                      Connect your SoundCloud account to search, browse Likes and playlists, and
-                      request compatible authorized MP3 playback on your system.
-                    </p>
-                    <p className="small muted">
-                      Requires an approved SoundCloud developer app. Track availability and API
-                      access vary; some tracks need the official app or line-in.
-                    </p>
-                    {state?.soundcloud.configured ? (
-                      <a className="primary orange-button" href="/api/soundcloud/connect">
-                        Connect SoundCloud
-                        <ArrowUpRight size={17} />
-                      </a>
-                    ) : (
-                      <button className="primary orange-button" onClick={() => nav('settings')}>
-                        Set up SoundCloud
-                        <ArrowUpRight size={17} />
-                      </button>
-                    )}
-                  </div>
-                </section>
+              <div className="tabs" aria-label="SoundCloud playback method">
+                <button
+                  className={scMode === 'mac' ? 'active' : ''}
+                  onClick={() => setScMode('mac')}
+                >
+                  Listen from Mac · no API keys
+                </button>
+                <button
+                  className={scMode === 'api' ? 'active' : ''}
+                  onClick={() => setScMode('api')}
+                >
+                  API library · optional
+                </button>
+              </div>
+              {scMode === 'mac' ? (
+                <SoundCloudListening
+                  status={state?.listening}
+                  rooms={state?.rooms || []}
+                  selectedRoomId={roomId}
+                  onSelectRoom={setRoomId}
+                  run={run}
+                  busy={busy}
+                />
               ) : (
                 <>
-                  <div className="tabs">
-                    {['search', 'likes', 'playlists'].map((t) => (
-                      <button
-                        className={scKind === t ? 'active' : ''}
-                        key={t}
-                        onClick={() => {
-                          setScKind(t);
-                          setPlaylistTitle('');
-                        }}
-                      >
-                        {t === 'likes' ? 'Liked tracks' : t.charAt(0).toUpperCase() + t.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                  {scKind === 'search' && (
-                    <form
-                      className="search"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        void browse('search', query);
-                      }}
-                    >
-                      <Search size={20} />
-                      <input
-                        aria-label="Search SoundCloud"
-                        placeholder="Tracks, artists, the remix you can’t stop playing…"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        required
+                  {!state?.soundcloud.connected ? (
+                    <section className="connect-panel">
+                      <div className="connect-icon">
+                        <Cloud size={48} />
+                      </div>
+                      <div>
+                        <h2>Your next favorite is out there.</h2>
+                        <p>
+                          Connect your SoundCloud account to search, browse Likes and playlists, and
+                          request compatible authorized MP3 playback on your system.
+                        </p>
+                        <p className="small muted">
+                          Requires an approved SoundCloud developer app. Track availability and API
+                          access vary; some tracks need the official app or line-in.
+                        </p>
+                        {state?.soundcloud.configured ? (
+                          <a className="primary orange-button" href="/api/soundcloud/connect">
+                            Connect SoundCloud
+                            <ArrowUpRight size={17} />
+                          </a>
+                        ) : (
+                          <button className="primary orange-button" onClick={() => nav('settings')}>
+                            Set up SoundCloud
+                            <ArrowUpRight size={17} />
+                          </button>
+                        )}
+                      </div>
+                    </section>
+                  ) : (
+                    <>
+                      <div className="tabs">
+                        {['search', 'likes', 'playlists'].map((t) => (
+                          <button
+                            className={scKind === t ? 'active' : ''}
+                            key={t}
+                            onClick={() => {
+                              setScKind(t);
+                              setPlaylistTitle('');
+                            }}
+                          >
+                            {t === 'likes'
+                              ? 'Liked tracks'
+                              : t.charAt(0).toUpperCase() + t.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                      {scKind === 'search' && (
+                        <form
+                          className="search"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void browse('search', query);
+                          }}
+                        >
+                          <Search size={20} />
+                          <input
+                            aria-label="Search SoundCloud"
+                            placeholder="Tracks, artists, the remix you can’t stop playing…"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            required
+                          />
+                          <button className="primary compact" disabled={loading}>
+                            Search
+                          </button>
+                        </form>
+                      )}
+                      {playlistTitle && (
+                        <div className="section-heading">
+                          <h2>{playlistTitle}</h2>
+                          <button className="text-button" onClick={() => void browse('playlists')}>
+                            <ChevronLeft size={16} />
+                            All playlists
+                          </button>
+                        </div>
+                      )}
+                      <TrackList
+                        items={items}
+                        loading={loading}
+                        play={playTrack}
+                        favorite={favorite}
+                        favorites={state?.settings.favorites || []}
                       />
-                      <button className="primary compact" disabled={loading}>
-                        Search
-                      </button>
-                    </form>
+                      {cursor && (
+                        <button
+                          className="secondary"
+                          disabled={loading}
+                          onClick={() => void browse(scKind, query, cursor)}
+                        >
+                          Load more
+                        </button>
+                      )}
+                      <div className="info-note">
+                        <ShieldCheck size={17} />
+                        <p>
+                          Authorized full MP3 streams only, including verified unencrypted MP3 HLS.
+                          AAC HLS and snippets use a fallback. No scraping or DRM bypass. Playback
+                          on your Sonos S1 system requires local testing.
+                        </p>
+                      </div>
+                    </>
                   )}
-                  {playlistTitle && (
-                    <div className="section-heading">
-                      <h2>{playlistTitle}</h2>
-                      <button className="text-button" onClick={() => void browse('playlists')}>
-                        <ChevronLeft size={16} />
-                        All playlists
-                      </button>
-                    </div>
-                  )}
-                  <TrackList
-                    items={items}
-                    loading={loading}
-                    play={playTrack}
-                    favorite={favorite}
-                    favorites={state?.settings.favorites || []}
-                  />
-                  {cursor && (
-                    <button
-                      className="secondary"
-                      disabled={loading}
-                      onClick={() => void browse(scKind, query, cursor)}
-                    >
-                      Load more
-                    </button>
-                  )}
-                  <div className="info-note">
-                    <ShieldCheck size={17} />
-                    <p>
-                      Authorized full MP3 streams only, including verified unencrypted MP3 HLS. AAC
-                      HLS and snippets use a fallback. No scraping or DRM bypass. Playback on your
-                      Sonos S1 system requires local testing.
-                    </p>
-                  </div>
                 </>
               )}
             </>
@@ -912,7 +949,7 @@ export default function Home() {
                 </div>
                 <div className="settings-card">
                   <Cloud className="orange" />
-                  <h2>SoundCloud</h2>
+                  <h2>SoundCloud API · optional</h2>
                   <p>
                     {state?.soundcloud.connected
                       ? 'Your account is connected. Access is limited to tracks available through the authorized API.'
@@ -1082,7 +1119,7 @@ export default function Home() {
           <div className="transport-buttons">
             <button
               className="icon-button"
-              disabled={!room || busy}
+              disabled={!room || busy || lineInSelected}
               aria-label="Previous track"
               onClick={() => void control('previous')}
             >
@@ -1102,7 +1139,7 @@ export default function Home() {
             </button>
             <button
               className="icon-button"
-              disabled={!room || busy}
+              disabled={!room || busy || lineInSelected}
               aria-label="Next track"
               onClick={() => void control('next')}
             >
@@ -1196,7 +1233,7 @@ export default function Home() {
           <div className="transport-buttons now-playing-transport">
             <button
               className="icon-button"
-              disabled={!room || busy}
+              disabled={!room || busy || lineInSelected}
               aria-label="Previous in now playing"
               onClick={() => void control('previous')}
             >
@@ -1216,7 +1253,7 @@ export default function Home() {
             </button>
             <button
               className="icon-button"
-              disabled={!room || busy}
+              disabled={!room || busy || lineInSelected}
               aria-label="Next in now playing"
               onClick={() => void control('next')}
             >

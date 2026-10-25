@@ -81,6 +81,7 @@ export class Sonos {
           duration: 284,
           online: true,
           lineIn: true,
+          lineInConnected: i === 0,
           track: {
             id: 'demo-1',
             title: 'Late night currents',
@@ -260,6 +261,10 @@ export class Sonos {
               room.coordinator = String(g['@_Coordinator']);
               room.group = String(g['@_ID']);
               room.name = String(m['@_ZoneName'] || room.name);
+              if (m['@_LineInConnected'] !== undefined)
+                room.lineInConnected = ['1', 'true'].includes(
+                  String(m['@_LineInConnected']).toLowerCase(),
+                );
             }
           }
         break;
@@ -271,7 +276,7 @@ export class Sonos {
         for (let r = pending.pop(); r; r = pending.pop()) {
           try {
             const coordinator = this.rooms.has(r.coordinator) ? r.coordinator : r.id;
-            const [transport, position, volume, mute] = await Promise.all([
+            const [transport, position, volume, mute, media] = await Promise.all([
               this.soap(coordinator, 'AVTransport', 'GetTransportInfo', { InstanceID: 0 }),
               this.soap(coordinator, 'AVTransport', 'GetPositionInfo', { InstanceID: 0 }),
               this.soap(r.id, 'RenderingControl', 'GetVolume', {
@@ -279,8 +284,12 @@ export class Sonos {
                 Channel: 'Master',
               }),
               this.soap(r.id, 'RenderingControl', 'GetMute', { InstanceID: 0, Channel: 'Master' }),
+              this.soap(coordinator, 'AVTransport', 'GetMediaInfo', { InstanceID: 0 }).catch(
+                () => ({}),
+              ),
             ]);
             r.state = transport.CurrentTransportState;
+            r.transportUri = media.CurrentURI ? String(media.CurrentURI) : undefined;
             r.position = seconds(position.RelTime);
             r.duration = seconds(position.TrackDuration);
             r.volume = Number(volume.CurrentVolume);
@@ -406,8 +415,10 @@ export class Sonos {
         .filter((r) => r.coordinator === c.id)
         .forEach((r) => {
           r.track = track;
+          r.transportUri = track.uri;
           r.state = 'PLAYING';
           r.position = 0;
+          r.duration = track.duration || 0;
         });
       return;
     }

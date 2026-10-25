@@ -102,3 +102,43 @@ test('direct playback rejects file, script, and embedded credentials', () => {
     assert.throws(() => playbackUri(v));
   assert.equal(playbackUri('x-sonosapi-stream:s123?sid=254'), 'x-sonosapi-stream:s123?sid=254');
 });
+test('polling reads the actual transport URI even when line-in has no track URI or metadata', async () => {
+  const s = new Sonos(false),
+    fixture = new Sonos(true).room('MOCK_0');
+  s.rooms.set('RINCON_TEST', {
+    ...fixture,
+    id: 'RINCON_TEST',
+    host: '192.168.1.50',
+    coordinator: 'RINCON_TEST',
+    track: undefined,
+    lineInConnected: undefined,
+  });
+  const original = global.fetch;
+  global.fetch = async (_input, options) => {
+    const body = String(options?.body);
+    const action = body.match(/<u:(\w+) /)![1];
+    const value: Record<string, string> = {
+      GetZoneGroupState: `<ZoneGroupState>${xml('<ZoneGroups><ZoneGroup Coordinator="RINCON_TEST" ID="test:0"><ZoneGroupMember UUID="RINCON_TEST" ZoneName="Rack input" LineInConnected="true" /></ZoneGroup></ZoneGroups>')}</ZoneGroupState>`,
+      GetTransportInfo: '<CurrentTransportState>PLAYING</CurrentTransportState>',
+      GetPositionInfo:
+        '<TrackURI></TrackURI><TrackMetaData></TrackMetaData><TrackDuration>00:00:00</TrackDuration><RelTime>00:00:00</RelTime>',
+      GetMediaInfo: '<CurrentURI>x-rincon-stream:RINCON_TEST</CurrentURI>',
+      GetVolume: '<CurrentVolume>25</CurrentVolume>',
+      GetMute: '<CurrentMute>0</CurrentMute>',
+    };
+    assert.ok(action in value, `expected SOAP operation ${action}`);
+    return new Response(
+      `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:${action}Response xmlns:u="urn:schemas-upnp-org:service:test:1">${value[action]}</u:${action}Response></s:Body></s:Envelope>`,
+    );
+  };
+  try {
+    const [r] = await s.refresh();
+    assert.equal(r.online, true);
+    assert.equal(r.lineInConnected, true);
+    assert.equal(r.transportUri, 'x-rincon-stream:RINCON_TEST');
+    assert.equal(r.track, undefined);
+    assert.equal(r.volume, 25);
+  } finally {
+    global.fetch = original;
+  }
+});

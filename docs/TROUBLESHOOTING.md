@@ -12,7 +12,7 @@ The app does not bridge multicast across VLANs. A professional installer may nee
 
 Check the official S1 app still sees the speakers. Wake the Mac, verify Wi-Fi and power, and rediscover after DHCP changes. UPnP fault 701 generally means the command is not available in the current transport state; 714 points to an invalid/rejected URI, but does not prove which codec failed. Queue browsing, favorite formats, line-in detection, and group changes need real-device verification. Bonded/surround devices and cross-household systems are outside the tested scope. Multiple active controllers can change topology between polls; refresh before retrying.
 
-## SoundCloud playback fails
+## Optional SoundCloud API playback fails
 
 1. Check the account is connected, then reconnect if a 401 indicates revoked/expired credentials. A 403 can reflect account/app/track access restrictions; a 429 is a rate limit, so wait. Do not repeatedly retry the same failing request.
 2. Confirm the full track plays in the official SoundCloud app in your region. That does not guarantee public-API eligibility.
@@ -37,3 +37,11 @@ Use the Mac’s LAN address, never `localhost` on the iPhone. Pair each browser 
 Reviewed SoundCloud’s public [OpenAPI source](https://github.com/soundcloud/api/blob/master/openapi/api.yaml) and [integration notes](https://github.com/soundcloud/api/blob/master/Agents.md), at commit `33092b81ff8011f1d97441ea6202d176c1cf19c2`, during implementation. These describe OAuth, URNs, and HLS/preview streams. See the [authentication guide](https://developers.soundcloud.com/docs/api/guide#authentication) and [API terms](https://developers.soundcloud.com/docs/api/terms-of-use) when registering your application. Direct developer/support web pages were inaccessible from this cloud machine; the official public Git repository was available.
 
 For Sonos format limits consult [supported audio formats](https://support.sonos.com/en-us/article/supported-audio-formats-for-sonos-music-library) for your model/S1 firmware. This implementation intentionally targets MP3 at 44.1 kHz stereo, and uses 192 kbps for local conversions, rather than claiming support for every S1 codec. Without physical speakers and your SoundCloud credentials, no specific cause or universal fix for your failing tracks has been verified.
+
+## Credential-free Mac line-in
+
+Use the recommended SoundCloud tab's setup and status first. No API variables, PUBLIC_BASE_URL, FFmpeg, ScreenCaptureKit permission, or BlackHole installation are required for the wired route. Connect the Mac output to a Connect/Connect:Amp input, choose the correct wired output in macOS, and start music in the normal SoundCloud browser. Select source and destinations in Current. The source can be excluded from the listening rooms. “Input selected” confirms Sonos transport, not audible music; check Mac volume and Sonos source-level/compression/mute if silent.
+
+If room routing partially fails, Current reports the failure and which steps may already have changed groups. Fix the offline device or cable and use Reconnect. It waits for topology rather than assuming immediate group convergence. It does not loop indefinitely or automatically take over a source another controller selected. Stop does not stop a different source; it also does not pause SoundCloud's website. If another controller subsequently adds rooms to the same group, transport stop affects that whole active group.
+
+The optional software prototype's recording permission is unrelated to wired playback. Do not grant broader permissions or install a virtual driver just to troubleshoot line-in. For the comparative investigation and exact physical/optional prototype steps, see [SoundCloud decision](SOUNDCLOUD-DECISION.md) and [prototype README](../prototypes/mac-audio/README.md).
