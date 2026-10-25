@@ -163,6 +163,7 @@ export class NetworkStream {
   private lastMetrics: any = null;
   private closing?: Promise<void>;
   private ownedUris = new Set<string>();
+  private rejectedPeers = 0;
   constructor(
     private sonos: Sonos,
     private deps: StreamDependencies = {},
@@ -180,6 +181,7 @@ export class NetworkStream {
     } catch {}
     return {
       gatewayOrigin,
+      httpPeerRejections: this.rejectedPeers,
       phase: this.phase,
       message: this.message,
       code: this.code,
@@ -245,6 +247,7 @@ export class NetworkStream {
       throw new StreamError('SESSION_ACTIVE', 'A stream is already starting or active.', 409);
     const epoch = ++this.epoch;
     this.code = '';
+    this.rejectedPeers = 0;
     this.phase = 'preparing';
     this.message = 'Opening the selected browser and checking native capture…';
     const radio = new LiveRadio({
@@ -411,6 +414,11 @@ export class NetworkStream {
       // Mock mode has no real renderer and must not fabricate a reader or fail just for that reason.
       if (!this.sonos.mock) {
         const last = stats.lastWriteAt || s.routedAt;
+        if (Date.now() - last > (this.deps.connectTimeoutMs || 30000) && this.rejectedPeers)
+          throw new StreamError(
+            'SONOS_HTTP_REJECTED',
+            'A request reached the private stream but its host was not one of the selected Sonos addresses. Check the direct LAN origin and proxy/NAT routing; the reader allowlist remains enforced.',
+          );
         if (Date.now() - last > (this.deps.connectTimeoutMs || 30000))
           throw new StreamError(
             stats.requests ? 'SONOS_NO_AUDIO' : 'SONOS_NO_HTTP',
@@ -434,6 +442,16 @@ export class NetworkStream {
     const peer = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
     const hosts = s.profile.roomIds.map((id) => this.sonos.rooms.get(id)?.host);
     if (!(this.sonos.mock && ['127.0.0.1', '::1'].includes(peer)) && !hosts.includes(peer)) {
+      if (new URL(req.url || '/', 'http://localhost').pathname === new URL(s.url).pathname) {
+        this.rejectedPeers++;
+        if (this.rejectedPeers === 1)
+          diagnose(
+            'Mac stream',
+            'HTTP_READER_REJECTED',
+            'A private stream request arrived from an unselected host and was denied.',
+            'Use the direct Mac LAN origin. A proxy or NAT can hide the Sonos source address; no host allowlist was broadened automatically.',
+          );
+      }
       res.writeHead(403).end('Only the selected Sonos rooms may read this private stream.');
       return;
     }

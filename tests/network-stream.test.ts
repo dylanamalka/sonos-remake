@@ -134,6 +134,7 @@ test(
         } as any,
       );
       assert.equal(deniedStatus, 403);
+      assert.equal((await service.status()).httpPeerRejections, 1);
       const token = oldPath.split('/').pop()!.replace('.mp3', '');
       assert.equal(
         JSON.stringify(await service.status()).includes(token),
