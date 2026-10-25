@@ -6,6 +6,8 @@ import { hostGuard, login, requireAuth, session } from './security';
 import * as sc from './soundcloud';
 import { audio, grant, localMedia, mediaPath } from './gateway';
 import { Listening, ListeningError } from './listening';
+import { NetworkStream } from './network-stream';
+import { StreamError } from './mac-capture';
 const trackSchema = z.object({
   source: z.enum(['local', 'soundcloud']).optional(),
   id: z.string().max(2048),
@@ -38,6 +40,7 @@ const wrap =
 export function createApi(sonos = new Sonos()) {
   const app = express();
   const listening = new Listening(sonos);
+  const networkStream = new NetworkStream(sonos);
   app.disable('x-powered-by');
   app.use(hostGuard);
   app.use(express.json({ limit: '128kb' }));
@@ -50,6 +53,7 @@ export function createApi(sonos = new Sonos()) {
     }
     audio(req, res).catch(next);
   });
+  app.all('/live/:token', (req, res) => networkStream.handleAudio(req, res));
   app.use('/api', requireAuth);
   app.get(
     '/api/state',
@@ -60,8 +64,43 @@ export function createApi(sonos = new Sonos()) {
         settings: await settings.read(),
         soundcloud: await sc.scStatus(),
         listening: await listening.status(),
+        networkStream: await networkStream.status(),
       }),
     ),
+  );
+  const streamProfile = z
+    .object({
+      browser: z.enum(['chrome', 'safari']).default('chrome'),
+      roomIds: z.array(idSchema).min(1).max(100),
+      httpMode: z.enum(['close', 'chunked']).default('close'),
+      bufferSeconds: z.number().min(1).max(5).default(2),
+    })
+    .strict();
+  app.get(
+    '/api/stream',
+    wrap(async (_req, res) => res.json(await networkStream.status())),
+  );
+  app.post(
+    '/api/stream/start',
+    wrap(async (req, res) =>
+      res.status(202).json(await networkStream.start(streamProfile.parse(req.body))),
+    ),
+  );
+  app.post(
+    '/api/stream/reconnect',
+    wrap(async (req, res) =>
+      res
+        .status(202)
+        .json(
+          await networkStream.reconnect(
+            req.body?.roomIds ? streamProfile.parse(req.body) : undefined,
+          ),
+        ),
+    ),
+  );
+  app.post(
+    '/api/stream/stop',
+    wrap(async (_req, res) => res.json(await networkStream.stop())),
   );
   app.get(
     '/api/listening',
@@ -80,7 +119,14 @@ export function createApi(sonos = new Sonos()) {
   );
   app.post(
     '/api/listening/connect',
-    wrap(async (_req, res) => res.json(await listening.connect())),
+    wrap(async (_req, res) =>
+      res.json(
+        await (async () => {
+          await networkStream.stop();
+          return listening.connect();
+        })(),
+      ),
+    ),
   );
   app.post(
     '/api/listening/stop',
@@ -105,11 +151,14 @@ export function createApi(sonos = new Sonos()) {
           z.object({ action: z.literal('seek'), value: z.number().int().min(0).max(86399) }),
         ])
         .parse(req.body);
-      await sonos.control(
-        idSchema.parse(req.params.id),
-        body.action,
-        'value' in body ? body.value : undefined,
-      );
+      const roomId = idSchema.parse(req.params.id);
+      if (networkStream.controlsRoom(roomId) && ['play', 'pause', 'stop'].includes(body.action)) {
+        if (body.action === 'play') await networkStream.reconnect();
+        else await networkStream.stop();
+        res.json({ ok: true, captureManaged: true });
+        return;
+      }
+      await sonos.control(roomId, body.action, 'value' in body ? body.value : undefined);
       res.json({ ok: true });
     }),
   );
@@ -308,7 +357,7 @@ export function createApi(sonos = new Sonos()) {
   app.use('/api', (_req, res) => res.status(404).json({ error: 'API route not found' }));
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status =
-      err instanceof ListeningError
+      err instanceof ListeningError || err instanceof StreamError
         ? err.status
         : err instanceof z.ZodError || err instanceof TypeError || err instanceof SyntaxError
           ? 400
@@ -325,5 +374,5 @@ export function createApi(sonos = new Sonos()) {
     );
     if (!res.headersSent) res.status(status).json({ error: message });
   });
-  return { app, sonos, listening };
+  return { app, sonos, listening, networkStream };
 }

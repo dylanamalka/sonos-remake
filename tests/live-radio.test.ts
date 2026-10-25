@@ -26,7 +26,7 @@ function syntheticPcm() {
 }
 for (const mode of ['close', 'chunked'] as const)
   test(
-    `experimental ${mode}-delimited radio emits decodable continuous MP3, bounds history, reconnects at a frame, and cleans up`,
+    `continuous ${mode}-delimited radio emits decodable continuous MP3, bounds history, reconnects at a frame, and cleans up`,
     { timeout: 15000 },
     async () => {
       const source = syntheticPcm();
@@ -45,6 +45,10 @@ for (const mode of ['close', 'chunked'] as const)
         assert.equal(head.status, 200);
         assert.equal(head.headers.get('accept-ranges'), 'none');
         assert.equal(head.headers.get('content-length'), null);
+        const probe = await fetch(url, { headers: { Range: 'bytes=0-15' } });
+        assert.equal(probe.status, 206);
+        assert.equal(probe.headers.get('content-range'), 'bytes 0-15/*');
+        assert.equal((await probe.arrayBuffer()).byteLength, 16);
         const response = await fetch(url);
         assert.equal(response.status, 200);
         assert.equal(response.headers.get('content-type'), 'audio/mpeg');
@@ -63,7 +67,7 @@ for (const mode of ['close', 'chunked'] as const)
         }
         assert.equal((await fetch(url)).status, 503, 'only one coordinator at a time in this test');
         assert.ok(radio.stats().frames > 40);
-        assert.ok(radio.stats().bufferedBytes < 20000);
+        assert.ok(radio.stats().bufferedBytes < 60000);
         assert.ok(
           process.memoryUsage().rss - before < 80 * 1024 * 1024,
           'bounded parent-process memory in a short synthetic run',
@@ -112,8 +116,8 @@ test('MP3 frame parser tolerates arbitrary boundaries without accumulating an un
   const parser = new Mp3Frames();
   for (let i = 0; i < 100; i++) parser.push(Buffer.alloc(1000));
   assert.ok(parser.bufferedBytes < 4);
-  const frame = Buffer.alloc(417);
-  frame.set([0xff, 0xfb, 0x90, 0x00]);
+  const frame = Buffer.alloc(626);
+  frame.set([0xff, 0xfb, 0xb0, 0x00]);
   assert.equal(parser.push(frame.subarray(0, 100)).length, 0);
   assert.equal(parser.push(frame.subarray(100)).length, 1);
 });

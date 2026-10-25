@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Current · browser capture test</title>
+    <style>
+      body {
+        font: 16px system-ui;
+        background: #11151a;
+        color: #edf1e9;
+        max-width: 700px;
+        margin: 8vh auto;
+        padding: 24px;
+        line-height: 1.7;
+      }
+      button {
+        font: inherit;
+        padding: 12px 20px;
+        border: 0;
+        border-radius: 8px;
+        margin: 8px;
+        background: #d5f996;
+        color: #192018;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.4;
+      }
+      #pulse {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: #293137;
+        margin: 25px 0;
+      }
+      #pulse.on {
+        background: #d5f996;
+      }
+      p,
+      small {
+        color: #b0bbc3;
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Test the browser-to-Sonos path.</h1>
+    <p>
+      Open this page in the <strong>same browser selected for Stream from Mac</strong>, start
+      Current's stream, and click Start pulse. This generates original synthetic beeps with a visual
+      flash every four seconds. Use low volume.
+    </p>
+    <button id="start">Start pulse</button><button id="stop" disabled>Stop</button>
+    <div id="pulse" aria-hidden="true"></div>
+    <p id="status" role="status">Off · no audio generated</p>
+    <p>
+      Compare the flash or locally audible Mac pulse with sound from one Sonos room. An existing
+      phone video/audio recording can help measure delay; do not assume the visual flash is
+      sample-accurate. Compare rooms to check group sync. This page measures no delay automatically
+      and sends no telemetry.
+    </p>
+    <p>
+      If these beeps reach Sonos but SoundCloud is silent, investigate browser/content capture
+      availability and SoundCloud's normal playback. This test does not bypass protected content.
+      Stop the pulse before playing SoundCloud. Do not play the live HTTP stream back in the
+      captured browser: that can create feedback.
+    </p>
+    <small
+      >Network transport and local browser timing add uncertainty. Record your macOS/S1 versions,
+      HTTP mode, app buffer setting, observed delay, and listening duration.</small
+    >
+    <script>
+      let context,
+        timer,
+        animation,
+        next = 0,
+        count = 0;
+      const start = document.getElementById('start'),
+        stop = document.getElementById('stop'),
+        pulse = document.getElementById('pulse'),
+        status = document.getElementById('status');
+      function schedule() {
+        if (!context) return;
+        const time = context.currentTime + 0.15;
+        next = time;
+        const osc = context.createOscillator(),
+          gain = context.createGain();
+        osc.frequency.value = 660;
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.06, time + 0.005);
+        gain.gain.setValueAtTime(0.06, time + 0.07);
+        gain.gain.linearRampToValueAtTime(0, time + 0.08);
+        osc.connect(gain).connect(context.destination);
+        osc.start(time);
+        osc.stop(time + 0.09);
+        osc.onended = () => {
+          osc.disconnect();
+          gain.disconnect();
+        };
+        count++;
+        status.textContent = `Pulse ${count} scheduled · local audio clock ${time.toFixed(3)}s`;
+      }
+      function draw() {
+        if (!context) return;
+        pulse.classList.toggle(
+          'on',
+          context.currentTime >= next && context.currentTime < next + 0.12,
+        );
+        animation = requestAnimationFrame(draw);
+      }
+      async function end() {
+        clearInterval(timer);
+        cancelAnimationFrame(animation);
+        const old = context;
+        context = undefined;
+        if (old) await old.close();
+        pulse.classList.remove('on');
+        start.disabled = false;
+        stop.disabled = true;
+        status.textContent = 'Off · no audio generated';
+      }
+      start.onclick = async () => {
+        start.disabled = true;
+        context = new AudioContext();
+        await context.resume();
+        count = 0;
+        schedule();
+        draw();
+        timer = setInterval(schedule, 4000);
+        stop.disabled = false;
+      };
+      stop.onclick = end;
+      addEventListener('pagehide', end);
+    </script>
+  </body>
+</html>

@@ -16,7 +16,8 @@
     "format:check": "prettier --check .",
     "prototype:bridge": "tsx prototypes/mac-audio/run.ts",
     "prototype:capture:build": "bash prototypes/mac-audio/build.sh",
-    "prototype:benchmark": "tsx prototypes/mac-audio/benchmark.ts"
+    "prototype:benchmark": "tsx prototypes/mac-audio/benchmark.ts",
+    "capture:build": "bash native/mac-audio/build.sh"
   },
   "engines": {
     "node": ">=22.0.0"

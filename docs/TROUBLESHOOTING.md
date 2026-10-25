@@ -38,10 +38,14 @@ Reviewed SoundCloud’s public [OpenAPI source](https://github.com/soundcloud/ap
 
 For Sonos format limits consult [supported audio formats](https://support.sonos.com/en-us/article/supported-audio-formats-for-sonos-music-library) for your model/S1 firmware. This implementation intentionally targets MP3 at 44.1 kHz stereo, and uses 192 kbps for local conversions, rather than claiming support for every S1 codec. Without physical speakers and your SoundCloud credentials, no specific cause or universal fix for your failing tracks has been verified.
 
-## Credential-free Mac line-in
+## Retained credential-free RCA fallback
 
-Use the recommended SoundCloud tab's setup and status first. No API variables, PUBLIC_BASE_URL, FFmpeg, ScreenCaptureKit permission, or BlackHole installation are required for the wired route. Connect the Mac output to a Connect/Connect:Amp input, choose the correct wired output in macOS, and start music in the normal SoundCloud browser. Select source and destinations in Current. The source can be excluded from the listening rooms. “Input selected” confirms Sonos transport, not audible music; check Mac volume and Sonos source-level/compression/mute if silent.
+Use the RCA fallback tab's setup and status first. No API variables, PUBLIC_BASE_URL, FFmpeg, ScreenCaptureKit permission, or BlackHole installation are required for the wired route. Connect the Mac output to a Connect/Connect:Amp input, choose the correct wired output in macOS, and start music in the normal SoundCloud browser. Select source and destinations in Current. The source can be excluded from the listening rooms. “Input selected” confirms Sonos transport, not audible music; check Mac volume and Sonos source-level/compression/mute if silent.
 
 If room routing partially fails, Current reports the failure and which steps may already have changed groups. Fix the offline device or cable and use Reconnect. It waits for topology rather than assuming immediate group convergence. It does not loop indefinitely or automatically take over a source another controller selected. Stop does not stop a different source; it also does not pause SoundCloud's website. If another controller subsequently adds rooms to the same group, transport stop affects that whole active group.
 
 The optional software prototype's recording permission is unrelated to wired playback. Do not grant broader permissions or install a virtual driver just to troubleshoot line-in. For the comparative investigation and exact physical/optional prototype steps, see [SoundCloud decision](SOUNDCLOUD-DECISION.md) and [prototype README](../prototypes/mac-audio/README.md).
+
+## Stream from Mac (network-only)
+
+This is the primary SoundCloud option. Follow [network streaming diagnostics](NETWORK-STREAMING.md) to separate native permission/build/display/browser errors, encoder failures, Sonos HTTP connectivity, unsupported probes/ranges, buffering, and UPnP rejection. No RCA, virtual driver, developer credentials, or Sonos modification is required. Real capture and S1 decoding must be tested locally; a successful mock/HTTP client is not hardware success. Start with the original pulse page in the same captured browser, then authorized SoundCloud content. Keep the Mac awake and stop capture when finished. Receiver delay is unmeasured until you test it.

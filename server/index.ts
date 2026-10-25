@@ -11,7 +11,7 @@ async function main() {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
   const frontend = next({ dev: process.env.NODE_ENV !== 'production', port, hostname: '0.0.0.0' });
   await frontend.prepare();
-  const { app, sonos } = createApi();
+  const { app, sonos, networkStream } = createApi();
   const code = await initPairing();
   const handler = frontend.getRequestHandler();
   app.use((req, res) => {
@@ -25,9 +25,15 @@ async function main() {
       .discover()
       .catch(() => console.error('Discovery failed. Check network access and use Discover again.'));
   });
-  const stop = () => {
+  let stopping = false;
+  const stop = async () => {
+    if (stopping) return;
+    stopping = true;
+    await networkStream.dispose();
+    server.closeAllConnections();
     server.close();
-    void frontend.close().finally(() => process.exit(0));
+    await frontend.close();
+    process.exit(0);
   };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);

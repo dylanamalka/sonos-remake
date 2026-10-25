@@ -7,8 +7,18 @@ test('pair, control playback, change volume, group rooms, manage queue, and insp
   await page.goto('/');
   await page.getByLabel('Pairing code').fill('current-e2e-only');
   await page.getByRole('button', { name: 'Connect to your home' }).click();
+  await page.request.post('/api/stream/stop', { data: {} });
   await page.request.post('/api/rooms/MOCK_1/group', { data: { coordinator: null } });
-  await page.request.post('/api/rooms/MOCK_0/control', { data: { action: 'play' } });
+  await page.request.post('/api/rooms/MOCK_0/play', {
+    data: {
+      id: 'demo-1',
+      title: 'Late night currents',
+      artist: 'Demo collection · simulated audio',
+      artwork: '/artwork.svg',
+      duration: 284,
+      uri: 'https://example.com/demo.mp3',
+    },
+  });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Make yourself at home.' })).toBeVisible();
   await expect(
@@ -45,6 +55,8 @@ test('pair, control playback, change volume, group rooms, manage queue, and insp
       .getByRole('button', { name: 'SoundCloud', exact: true })
       .click();
   }
+  await expect(page.getByRole('heading', { name: 'Stream from Mac', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'RCA line-in · fallback', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'SoundCloud, through your Mac.' })).toBeVisible();
   await page.getByRole('button', { name: 'API library · optional' }).click();
   await expect(

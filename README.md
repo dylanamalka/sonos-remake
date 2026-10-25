@@ -4,30 +4,32 @@ A local, responsive Sonos controller for iPhone and Mac, built with Next.js, Rea
 
 **Built and tested with simulated devices in the cloud. Real S1 speakers and an authenticated SoundCloud account have not been tested here.** The implementation is usable locally; hardware behavior, native service availability, and individual SoundCloud tracks need the acceptance checks below.
 
-## SoundCloud without developer keys — recommended
+## Network-only SoundCloud — Stream from Mac
 
-Use the new **SoundCloud → Listen from Mac** tab. The selected architecture is the official SoundCloud website on the Mac feeding **one Sonos Connect/Connect:Amp physical line-in**, which Sonos distributes to your selected rooms. It avoids SoundCloud's failing direct-to-S1 encoded stream path. Normal SoundCloud login is still required; developer API credentials are not.
+**SoundCloud browser → native ScreenCaptureKit browser-audio capture → local 192 kbps stereo MP3 radio → existing Sonos S1 rooms over the LAN.** No RCA cable, hardware purchase, rewiring, SoundCloud developer credentials, or Sonos installation change is required. This is now the primary SoundCloud tab; the earlier RCA path and API library remain optional fallback tabs.
 
-Connect a **3.5 mm stereo-to-two-RCA cable** from the Mac mini's headphone/audio output to the RCA **inputs** of one Connect/Connect:Amp. A USB DAC is needed only if no suitable output is available. Choose that output in macOS Sound settings. In Current, choose the discovered wired source, select destination rooms, save, then **Open SoundCloud on Mac** and **Listen in selected rooms**. Start a track in SoundCloud on the Mac. The source device need not be a destination; one cable can feed the selected Sonos group. Keep volumes modest until verified.
-
-Current controls input routing, room grouping, stop/resume, volume, and mute. SoundCloud controls tracks, search, Likes, playlists, and its own queue in its official player. **The iPhone controls rooms and routing; this does not provide remote control of SoundCloud's website catalog or track queue from Current.** “Sonos input selected” confirms transport and topology, not audible music. Current does not raise volume, unmute rooms, or bypass account/content restrictions. Pausing/stopping the Sonos input does not pause the Mac website. Other Mac sounds can reach the same cable: use Focus and close unrelated audio sources.
-
-The source/room profile persists in `.local/listening.json`. Reconnect explicitly retries it after a device/network change. No automatic capture, firmware upgrade, background daemon, virtual driver, gateway port, or macOS recording permission is required for this path. Existing favorites, service configuration, `.env`, and room controls are preserved. The prior API workflow remains under **API library · optional**.
-
-See [the research, comparison, and test evidence](docs/SOUNDCLOUD-DECISION.md). A separate [ScreenCaptureKit/live-radio prototype](prototypes/mac-audio/README.md) is included for optional experimentation; native Mac capture and S1 live HTTP compatibility are unverified and it is not enabled by the application.
-
-### Update your existing Mac installation
-
-Stop the running controller with Ctrl-C, then run from its existing checkout:
+Stop the running controller, then update from the existing Mac checkout:
 
 ```bash
 git pull --ff-only
 npm ci
+brew install ffmpeg
+npm run capture:build
 npm run build
 npm start
 ```
 
-Do not overwrite your existing `.env` or `.local` folder. If Git reports local changes/divergence, preserve those changes before updating; do not reset them. Pair the browser again after restart with the same terminal code. Open the SoundCloud tab and finish the one-time cable/source setup. No new environment variables or SoundCloud keys are required. Test an individual room first, then a two-room group before your whole system.
+If the Apple Command Line Tools are missing, run `xcode-select --install` once, finish its installation, then rerun the helper build. Requires macOS 13+ with its SDK; compiled helper products remain local under ignored `.local/mac-capture/`. Existing `.env` and preferences are preserved. Pair again after restart with the same terminal code.
+
+Select **SoundCloud → Stream from Mac**, choose Chrome/Safari and rooms, and click Stream from Mac. Grant macOS Screen Recording / Screen & System Audio Recording permission on the Mac to Current Audio Capture or the identified launcher. Restart Current if macOS requests it, then reconnect. Play SoundCloud normally in the chosen browser. Only that browser application is included, though all its tabs may contribute audio. No SoundCloud cookies, protected media requests, URLs, or credentials are extracted.
+
+The stream uses MP3 at **44.1 kHz, stereo, 192 kbps**, radio-style Sonos URI/DIDL, an expiring private HTTP endpoint on the existing port, and coordinator playback for synchronized groups. A two-second application buffer, silence keep-alive, bounded queues, frame-aligned HTTP reconnect, explicit session reconnect and process cleanup are implemented. Sonos receiver buffering adds unmeasured delay; no real-time latency claim is made. No automatic recording resumes after a restart or source takeover.
+
+Automatic private LAN address selection is used when unambiguous. Otherwise set `PUBLIC_BASE_URL` to the Mac's actual speaker-reachable HTTP origin and allow its existing TCP port in the Mac firewall. No extra server/port or paid cloud infrastructure is required. The normal SoundCloud player retains login, search, track/queue selection, and playback restrictions; Current's iPhone UI controls the destination/session rather than automating the website.
+
+**Implemented and validated with real encoded audio/HTTP clients and simulated devices in Linux. Native ScreenCaptureKit compilation/capture, macOS permission attribution, real S1 decoding/sync, audible delay, and actual Safari behavior remain unverified here.** Encoder readiness/HTTP bytes/PLAYING are not proof of audible hardware playback. The native helper requires an available Mac graphical session/display; specific failures are reported rather than inventing headless success.
+
+Read the [network setup, diagnostics and focused hardware acceptance test](docs/NETWORK-STREAMING.md). Use the included `/capture-test.html` in the captured browser for original test pulses before testing SoundCloud. The earlier [line-in decision report](docs/SOUNDCLOUD-DECISION.md) is historical and superseded for the network-only requirement.
 
 ## Run on your Mac
 
@@ -51,7 +53,7 @@ npm run build
 npm start
 ```
 
-Keep the Mac awake and this process running. No paid cloud hosting, database server, or subscription is required for Sonos control. Developer access is required only for the optional API library, not the recommended SoundCloud line-in workflow.
+Keep the Mac awake and this process running. No paid cloud hosting, database server, or subscription is required for Sonos control. Developer access is required only for the optional API library, not Stream from Mac or the retained line-in path.
 
 ### iPhone
 
@@ -59,7 +61,7 @@ Use the same home Wi-Fi. Find the Mac’s Wi-Fi IP in **System Settings → Wi-F
 
 The UI adapts to iPhone; tap the playing track for the full Now Playing screen. The queue is accessible in the top bar. Safari’s Share → Add to Home Screen installs the home-screen entry. Service workers and full PWA/offline behavior require a secure context: localhost on Mac or trusted HTTPS on your LAN. Ordinary LAN HTTP supports the controller in Safari. See [network and HTTPS notes](docs/TROUBLESHOOTING.md).
 
-### Optional audio gateway configuration (not needed for line-in)
+### Audio gateway configuration (live radio and local files)
 
 In `.env`, set a URL **your speakers can reach**:
 
@@ -122,13 +124,13 @@ The HLS relay has no byte seeking and may not work with every S1 firmware. Progr
 4. Restart Current. On the **Mac at localhost**, pair, then choose SoundCloud → Connect. Initiate and finish OAuth in the same browser/origin so the state-bound pairing session is present. If you registered a different redirect origin, use that origin from the start. The connected account is shared with your other paired devices, including iPhone.
 5. Set `PUBLIC_BASE_URL`, select a room, search, and play a track. Any refusal appears in the banner and Diagnostics. Never paste keys into chat or commit `.env`/`.local`.
 
-### Reliable alternative: physical line-in
+### Retained optional fallback: physical line-in
 
 For content that plays legitimately in the official SoundCloud app but is unavailable through the public API, connect an authorized audio output to a Connect’s stereo RCA input (for example Mac headphone output → 3.5 mm to RCA, or iPhone audio adapter → RCA). Start SoundCloud on that source. In Current select the destination room, choose **Play a source → Physical line-in**, and select the Connect receiving the cable. Group additional rooms for Sonos-managed synchronization.
 
 This uses a real physical input; no cable or audio-input hardware can be provisioned by the cloud. It avoids the failing Sonos service stream-decoder path, but needs physical testing. Configure line-in source level/compression/delay using the official S1 app as needed. Connect is not assumed to support AirPlay. Source playback controls stay in SoundCloud; Current controls the rooms and input selection.
 
-## Troubleshooting the recommended Mac input
+## Troubleshooting the retained RCA input
 
 - Silent rooms: verify SoundCloud plays normally on the wired Mac, its output/volume, RCA inputs rather than outputs, Sonos mute/volume, and line-in source level/compression in the official S1 app. Current does not verify audible energy or change source-level/compression settings automatically.
 - Offline/missing source: reconnect power/network and rediscover. Cable presence is shown only when Sonos reports it; “unknown” is not treated as a disconnected cable.

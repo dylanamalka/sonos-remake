@@ -25,6 +25,7 @@ test('credential-free SoundCloud setup persists, selects a synchronized line-in 
         .click();
   };
   await navigate();
+  await page.getByRole('button', { name: 'RCA line-in · fallback', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'SoundCloud, through your Mac.' })).toBeVisible();
   await expect(page.getByText('No developer keys.', { exact: false })).toBeVisible();
   await page.getByLabel('Wired Sonos source').selectOption('MOCK_0');
@@ -58,6 +59,7 @@ test('credential-free SoundCloud setup persists, selects a synchronized line-in 
   ).toBeVisible();
   await page.reload();
   await navigate();
+  await page.getByRole('button', { name: 'RCA line-in · fallback', exact: true }).click();
   await expect(page.getByText('Studio line-in → Lounge, Terrace')).toBeVisible();
   await page.getByRole('button', { name: 'Reconnect rooms', exact: true }).click();
   await expect(

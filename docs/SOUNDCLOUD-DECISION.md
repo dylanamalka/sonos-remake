@@ -1,4 +1,6 @@
-# SoundCloud without developer credentials: decision and evidence
+# Historical line-in decision and evidence
+
+**Superseded for the network-only requirement:** Current now implements Stream from Mac as the primary path. This report preserves the earlier comparison; see [NETWORK-STREAMING.md](NETWORK-STREAMING.md) for current implementation, setup, limitations, and acceptance tests.
 
 ## Decision
 

@@ -42,7 +42,7 @@ const producer = synthetic
       { stdio: ['ignore', 'pipe', 'pipe'] },
     )
   : spawn(
-      path.resolve('.local/bin/current-capture'),
+      path.resolve('.local/mac-capture/CurrentCapture.app/Contents/MacOS/CurrentCapture'),
       [safari ? 'com.apple.Safari' : 'com.google.Chrome'],
       { stdio: ['ignore', 'pipe', 'pipe'] },
     );

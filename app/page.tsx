@@ -40,11 +40,14 @@ import {
 import type { Room, Track, Diagnostic } from '../server/types';
 import type { ListeningStatus } from '../server/listening';
 import SoundCloudListening from './soundcloud-listening';
+import MacNetworkStream from './network-stream';
+import type { NetworkStreamStatus } from '../server/network-stream';
 type Item = Track & { playlist?: boolean; count?: number };
 type State = {
   rooms: Room[];
   mock: boolean;
   listening?: ListeningStatus;
+  networkStream?: NetworkStreamStatus;
   settings: { favorites: Track[]; roomOrder: string[]; hiddenRooms: string[] };
   soundcloud: {
     configured: boolean;
@@ -124,7 +127,7 @@ export default function Home() {
   const [items, setItems] = useState<Item[]>([]);
   const [queue, setQueue] = useState<Track[]>([]);
   const [scKind, setScKind] = useState('search');
-  const [scMode, setScMode] = useState('mac');
+  const [scMode, setScMode] = useState('network');
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState('');
   const [playlistTitle, setPlaylistTitle] = useState('');
@@ -169,7 +172,7 @@ export default function Home() {
   }, [notice]);
   const room = state?.rooms.find((r) => r.id === roomId);
   const lineInSelected = Boolean(
-    (room?.transportUri || room?.track?.uri)?.startsWith('x-rincon-stream:'),
+    /^(x-rincon-stream:|x-rincon-mp3radio:)/.test(room?.transportUri || room?.track?.uri || ''),
   );
   const coordinator = state?.rooms.find((r) => r.id === room?.coordinator) || room;
   const members = state?.rooms.filter((r) => r.coordinator === coordinator?.id) || [];
@@ -734,10 +737,16 @@ export default function Home() {
               </div>
               <div className="tabs" aria-label="SoundCloud playback method">
                 <button
+                  className={scMode === 'network' ? 'active' : ''}
+                  onClick={() => setScMode('network')}
+                >
+                  Stream from Mac
+                </button>
+                <button
                   className={scMode === 'mac' ? 'active' : ''}
                   onClick={() => setScMode('mac')}
                 >
-                  Listen from Mac · no API keys
+                  RCA line-in · fallback
                 </button>
                 <button
                   className={scMode === 'api' ? 'active' : ''}
@@ -746,7 +755,16 @@ export default function Home() {
                   API library · optional
                 </button>
               </div>
-              {scMode === 'mac' ? (
+              {scMode === 'network' ? (
+                <MacNetworkStream
+                  status={state?.networkStream}
+                  rooms={state?.rooms || []}
+                  selectedRoomId={roomId}
+                  onSelectRoom={setRoomId}
+                  run={run}
+                  busy={busy}
+                />
+              ) : scMode === 'mac' ? (
                 <SoundCloudListening
                   status={state?.listening}
                   rooms={state?.rooms || []}
